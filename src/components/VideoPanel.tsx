@@ -24,7 +24,7 @@ export default function VideoPanel({ videoUrl, isGenerating, lastUpdated }: Vide
             <div className="absolute inset-0 z-10 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
               <div className="w-8 h-8 border-2 border-accent-blue border-t-transparent rounded-full animate-spin" />
               <span className="text-xs font-mono text-accent-blue uppercase tracking-tighter animate-pulse">
-                Seedance 2.0 Regenerating...
+                IMA Router: Generating Scene...
               </span>
             </div>
           )}

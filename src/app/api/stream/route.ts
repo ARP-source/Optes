@@ -25,7 +25,8 @@ export async function GET(req: NextRequest) {
       let activeData: { id: string; timestamp: string; channel: string; content: string }[] = [];
       let dataIndex = 0;
       let lastReport: unknown = null;
-      let lastVideo: { videoUrl: string } | null = null;
+      let lastVideo: { videoUrl?: string; taskId?: string; status?: string } | null = null;
+      let pendingTaskId: string | null = null;
 
       const pushUpdate = (data: unknown) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
@@ -52,12 +53,21 @@ export async function GET(req: NextRequest) {
           });
           lastReport = await synthResponse.json();
 
-          // 3. Call Generation (Seedance 2.0)
+          // 3. Call Generation (Seedance 2.0 via IMA Router)
           const genResponse = await fetch(`${new URL(req.url).origin}/api/generate-scene`, {
             method: "POST",
-            body: JSON.stringify(lastReport),
+            body: JSON.stringify({ 
+              ...lastReport as object,
+              taskId: pendingTaskId 
+            }),
           });
           lastVideo = await genResponse.json();
+          
+          if (lastVideo?.videoUrl) {
+            pendingTaskId = null; // Reset if we got a video
+          } else if (lastVideo?.taskId) {
+            pendingTaskId = lastVideo.taskId; // Keep track of pending task
+          }
 
           // 4. Push combined state
           pushUpdate({
@@ -67,6 +77,7 @@ export async function GET(req: NextRequest) {
             video: lastVideo?.videoUrl || null,
             lastUpdated: new Date().toLocaleTimeString(),
           });
+
 
         } catch (err) {
           console.error("Stream Loop Error:", err);

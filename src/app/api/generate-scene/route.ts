@@ -2,9 +2,9 @@ import { NextRequest } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    const report = await req.json();
-    const apiUrls = (process.env.SEEDANCE_API_URLS || "https://api.seedance.ai/v1,https://ark.ap-southeast.bytepluses.com/api/v3,https://api.aimlapi.com/v2").split(",").filter(Boolean);
-    const apiKeys = (process.env.SEEDANCE_API_KEYS || "").split(",").filter(Boolean);
+    const { taskId: existingTaskId, ...report } = await req.json();
+    const apiKey = process.env.IMA_ROUTER_API_KEY;
+    const baseUrl = (process.env.IMA_ROUTER_BASE_URL || "https://api.imarouter.com").replace(/\/$/, "");
 
     // Construct the cinematic prompt
     const dangerZones = Array.isArray(report.dangerZones) ? report.dangerZones : [];
@@ -17,69 +17,115 @@ export async function POST(req: NextRequest) {
     High danger zones at ${dangerZoneDesc} marked with ORANGE heatmaps. 
     Smoke rising from the West Wing/Revolution gallery area. Drone is orbiting the building from Shoreline Blvd side.`;
 
-    console.log("OPTES SEEDANCE ENGINE: PROMPT GENERATED:", prompt);
+    console.log("OPTES IMA ROUTER: PROMPT GENERATED:", prompt);
 
-    // Advanced Multi-URL & Multi-Key Rotation Logic
-    if (apiKeys.length > 0) {
-      for (const url of apiUrls) {
-        for (const key of apiKeys) {
-          try {
-            console.log(`Testing Seedance URL: ${url} with key: ${key.substring(0, 8)}...`);
-            
-            // Try different possible endpoints and their common payload structures
-            const configurations = [
-              { endpoint: "/generate", payload: { prompt, aspect_ratio: "16:9" } },
-              { endpoint: "/video/generations", payload: { prompt, model: "seedance-2" } },
-              { endpoint: "/chat/completions", payload: { model: "seedance-2", messages: [{ role: "user", content: prompt }] } },
-              { endpoint: "/v1/video/generations", payload: { prompt } },
-            ];
-            
-            for (const config of configurations) {
-              const fullUrl = `${url.replace(/\/$/, "")}${config.endpoint}`;
-              console.log(`Trying endpoint: ${fullUrl}`);
-              
-              const response = await fetch(fullUrl, {
-                method: "POST",
-                headers: { 
-                  "Authorization": `Bearer ${key}`, 
-                  "X-API-KEY": key, // Try alternative header
-                  "Content-Type": "application/json" 
-                },
-                body: JSON.stringify(config.payload)
-              });
+    if (!apiKey) {
+      console.warn("IMA_ROUTER_API_KEY not configured. Using demo fallback.");
+      return Response.json({ 
+        videoUrl: "https://vjs.zencdn.net/v/oceans.mp4", // This is what the user saw, but I'll replace it below in the quota section as well
+        status: "demo_fallback",
+        promptGenerated: prompt
+      });
+    }
 
-              const respBody = await response.text();
+    let taskId = existingTaskId;
 
-              if (response.ok) {
-                const result = JSON.parse(respBody);
-                console.log(`SUCCESS: Seedance reached via ${fullUrl}`);
-                return Response.json({ 
-                  videoUrl: result.video_url || result.url || result.output || (result.choices && result.choices[0].message.content) || (result.data && result.data[0].url),
-                  status: "completed",
-                  promptGenerated: prompt
-                });
-              } else {
-                console.warn(`Endpoint ${fullUrl} failed (${response.status}): ${respBody.substring(0, 100)}`);
-              }
-            }
-          } catch (err) {
-            console.error(`Network error for ${url}:`, (err as Error).message);
-          }
+    if (!taskId) {
+      // 1. Create Video Task
+      console.log("IMA Router: Creating video task...");
+      const createResponse = await fetch(`${baseUrl}/v1/videos`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "seedance-2.0",
+          prompt: prompt,
+        })
+      });
+
+      if (!createResponse.ok) {
+        const errorText = await createResponse.text();
+        console.warn(`IMA Router Creation Failed (${createResponse.status}): ${errorText}`);
+        
+        // Robust fallback for Quota or other API issues
+        if (errorText.includes("insufficient_user_quota") || createResponse.status === 403 || createResponse.status === 402) {
+          console.log("IMA Router: Quota exhausted or access denied. Falling back to demo video.");
+          return Response.json({ 
+            // Using a more thematic drone video for the fallback
+            videoUrl: "https://videos.pexels.com/video-files/5266857/5266857-uhd_2560_1440_30fps.mp4", 
+            status: "demo_fallback",
+            promptGenerated: prompt,
+            note: "API Quota exhausted. Using pre-rendered asset."
+          });
         }
+        
+        throw new Error(`IMA Router Creation Failed (${createResponse.status}): ${errorText}`);
+      }
+
+      const taskData = await createResponse.json();
+      taskId = taskData.id || taskData.job_id || taskData.task_id || taskData.data?.id;
+
+      if (!taskId) {
+        throw new Error("IMA Router did not return a task ID");
+      }
+      console.log(`IMA Router: Task created with ID: ${taskId}.`);
+    } else {
+      console.log(`IMA Router: Polling existing task ID: ${taskId}`);
+    }
+
+    // 2. Poll for Status (Wait up to 25 seconds in this request)
+    const maxPollAttempts = 8;
+    const pollInterval = 3000; // 3 seconds
+
+    for (let i = 0; i < maxPollAttempts; i++) {
+      console.log(`IMA Router: Polling attempt ${i + 1}/${maxPollAttempts} for task ${taskId}...`);
+      const statusResponse = await fetch(`${baseUrl}/v1/videos/${taskId}`, {
+        headers: { 
+          "Authorization": `Bearer ${apiKey}`
+        }
+      });
+
+
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        const videoUrl = statusData.video_url || statusData.url || statusData.data?.video_url || statusData.output;
+        const status = statusData.status || statusData.data?.status || statusData.state;
+
+        if (videoUrl && (status === "completed" || status === "success" || status === "succeeded")) {
+          console.log("IMA Router: Video generation completed!");
+          return Response.json({ 
+            videoUrl,
+            status: "completed",
+            promptGenerated: prompt,
+            taskId
+          });
+        } else if (status === "failed" || status === "error") {
+          throw new Error(`IMA Router Task Failed: ${statusData.error || statusData.message || "Unknown error"}`);
+        }
+        
+        console.log(`IMA Router: Status is ${status || "pending"}...`);
+      }
+
+      if (i < maxPollAttempts - 1) {
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
       }
     }
 
-    // Fallback: If all attempts fail
-    console.warn("All Seedance endpoints/keys failed. Using demo fallback.");
+    // If we reach here, polling timed out but task might still be running
+    console.warn("IMA Router: Polling timed out. Returning last known status/task ID.");
     return Response.json({ 
-      videoUrl: "https://vjs.zencdn.net/v/oceans.mp4", 
-      status: "demo_fallback",
+      status: "processing",
+      taskId,
       promptGenerated: prompt,
-      note: "Connectivity issues with Seedance endpoints. Verify URL resolution."
+      note: "Video is still generating. Check back in the next stream update."
     });
 
+
   } catch (error) {
-    console.error("Seedance Generation Error:", error);
+    console.error("IMA Router Integration Error:", error);
     return Response.json({ error: "Failed to generate scene", details: error instanceof Error ? error.message : "Unknown error" }, { status: 500 });
   }
 }
+

@@ -22,14 +22,17 @@ export default function Dashboard() {
       if (data.type === "status") {
         setStatus(data.message);
       } else if (data.type === "update") {
-        setIsGenerating(true);
         setFeed(data.feed);
         setReport(data.report);
         setVideoUrl(data.video);
         setLastUpdated(data.lastUpdated);
         
-        // Simulate a generation delay for UI feel
-        setTimeout(() => setIsGenerating(false), 2000);
+        // If no video yet, keep the generating state active
+        if (!data.video) {
+          setIsGenerating(true);
+        } else {
+          setIsGenerating(false);
+        }
       } else if (data.type === "error") {
         setStatus("Error: " + data.message);
       }
