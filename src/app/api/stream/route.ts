@@ -2,19 +2,19 @@ import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const DEMO_SCENARIO = "Partial collapse of a 4-story office building downtown. Estimated 40 occupants. Fire on floors 2-3. Structural integrity compromised on north side. 3 rescue units on scene, 2 en route.";
+const DEMO_SCENARIO = "Major structural incident at the Computer History Museum (1401 N Shoreline Blvd, Mountain View). A localized floor collapse occurred in the 'Revolution' exhibit area (West Wing). Multiple hackers and attendees trapped. High-value artifacts at risk. Fire detection in the 'Mainframe' section. 3 rescue units on scene, 2 en route from MVFD.";
 
 const SIMULATED_DATA_POOL = [
-  { channel: "witness", content: "Heavy smoke coming from the north stairwell. People trapped on floor 4." },
-  { channel: "unit", content: "Rescue 1 on scene. Establishing command post at South entrance. Initiating primary search of Floor 1." },
-  { channel: "sensor", content: "TEMP_SENSOR_02: 450°C. Gas levels rising in basement. Structural sensor S-09 reporting 15% integrity drop." },
-  { channel: "911", content: "911 Dispatch: Multiple callers reporting collapse of north facade. Floor 3 floorplate suspected unstable." },
-  { channel: "unit", content: "Engine 5: Water supply established. Starting fire suppression on Floor 2." },
-  { channel: "witness", content: "I can see people waving from the windows on the east side. Help is needed there." },
-  { channel: "sensor", content: "TEMP_SENSOR_03: 120°C. North wall vibrations detected. High risk of secondary collapse." },
-  { channel: "911", content: "911 Dispatch: Caller ID 402 reporting trapped group in conference room B, Floor 4." },
-  { channel: "unit", content: "Rescue 2: On route, ETA 3 minutes. Heavy traffic on Main St." },
-  { channel: "sensor", content: "CO_LEVEL: CRITICAL. 400ppm detected in central HVAC shaft." },
+  { channel: "witness", content: "Loud crash near the Babbage Engine. Dust everywhere, the floor gave way in the Revolution wing." },
+  { channel: "unit", content: "MVFD Rescue 1: Command established at Shoreline Blvd entrance. Entering the West Wing for primary search." },
+  { channel: "sensor", content: "SMOKE_01 (Gallery): CRITICAL levels. Temperature rising near the 'Cray-1' exhibit. Structural integrity at 65%." },
+  { channel: "911", content: "911 Dispatch: Multiple reports of attendees trapped under debris in the 'Software' theater area." },
+  { channel: "unit", content: "Engine 5: Laying lines to the hydrant near the 'IBM 1401' demo room. Preparing for fire suppression." },
+  { channel: "witness", content: "People are exiting towards the parking lot, but some are still inside the 'PDP-1' demo area." },
+  { channel: "sensor", content: "THERMAL_MV: High heat signature detected in the basement storage below the 'Eniac' display." },
+  { channel: "911", content: "911 Dispatch: Caller 650 reports 5 people pinned in the back corner of the 'Internet History' section." },
+  { channel: "unit", content: "Rescue 2: ETA 2 minutes. Turning onto Shoreline. Requesting heavy rescue equipment for floor breach." },
+  { channel: "sensor", content: "VIBRATION_SENSE: Significant movement detected in the 'Mainframe' wing roof structure." },
 ];
 
 export async function GET(req: NextRequest) {

@@ -35,12 +35,16 @@ export async function POST(req: NextRequest) {
         messages: [
           {
             role: "system",
-            content: `You are an emergency incident command AI. Given raw multi-channel incident data, extract structured situational awareness. 
+            content: `You are an emergency incident command AI for Optes. 
+            The current incident is located at the Computer History Museum in Mountain View (1401 N Shoreline Blvd).
+            You have deep knowledge of this building's layout, including the 'Revolution' gallery, the West Wing, the 'Software' theater, and the mainframe exhibits.
+            
+            Given raw multi-channel incident data, extract structured situational awareness tailored to this specific location. 
             Respond only in JSON with fields: 
             - victimCount (string, e.g. "Approx. 12 confirmed, 20 estimated")
-            - victimLocations (string, description of where victims are grouped)
+            - victimLocations (string, description of where victims are grouped within the museum wings/exhibits)
             - dangerZones (array of objects with 'location' and 'severity' which is 'low'|'medium'|'high')
-            - responderPositions (string, summary of units and assignments)
+            - responderPositions (string, summary of units and their museum-specific assignments)
             - recommendedActions (array of exactly 3 strings)
             - confidenceScore (number between 0 and 100)
             
@@ -56,6 +60,12 @@ export async function POST(req: NextRequest) {
     });
 
     const result = await response.json();
+    
+    if (!result.choices || !result.choices[0]) {
+      console.error("GLM API Error Response:", JSON.stringify(result, null, 2));
+      throw new Error(result.error?.message || "Invalid GLM response structure");
+    }
+
     const content = result.choices[0].message.content;
     
     // Parse the JSON from the string response
