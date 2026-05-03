@@ -1,5 +1,41 @@
 import { NextRequest } from "next/server";
 
+function pickVideoUrl(payload: any): string | null {
+  if (!payload || typeof payload !== "object") return null;
+
+  const candidates = [
+    payload.video_url,
+    payload.videoUrl,
+    payload.url,
+    payload.output,
+    payload.result_url,
+    payload.file_url,
+    payload.data?.video_url,
+    payload.data?.videoUrl,
+    payload.data?.url,
+    payload.data?.output,
+    payload.result?.video_url,
+    payload.result?.url,
+    payload.result?.output?.url,
+    Array.isArray(payload.outputs) ? payload.outputs[0]?.url : undefined,
+    Array.isArray(payload.output) ? payload.output[0]?.url : undefined,
+  ];
+
+  const match = candidates.find((value) => typeof value === "string" && value.length > 0);
+  return typeof match === "string" ? match : null;
+}
+
+function normalizeStatus(raw: unknown): "completed" | "failed" | "pending" {
+  const value = typeof raw === "string" ? raw.toLowerCase() : "";
+  if (["completed", "success", "succeeded", "done", "finished", "ready"].includes(value)) {
+    return "completed";
+  }
+  if (["failed", "error", "cancelled", "canceled", "rejected"].includes(value)) {
+    return "failed";
+  }
+  return "pending";
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { taskId: existingTaskId, ...report } = await req.json();
@@ -90,10 +126,10 @@ export async function POST(req: NextRequest) {
 
       if (statusResponse.ok) {
         const statusData = await statusResponse.json();
-        const videoUrl = statusData.video_url || statusData.url || statusData.data?.video_url || statusData.output;
-        const status = statusData.status || statusData.data?.status || statusData.state;
+        const videoUrl = pickVideoUrl(statusData);
+        const status = normalizeStatus(statusData.status || statusData.data?.status || statusData.state);
 
-        if (videoUrl && (status === "completed" || status === "success" || status === "succeeded")) {
+        if (videoUrl && status === "completed") {
           console.log("IMA Router: Video generation completed!");
           return Response.json({ 
             videoUrl,
@@ -101,7 +137,7 @@ export async function POST(req: NextRequest) {
             promptGenerated: prompt,
             taskId
           });
-        } else if (status === "failed" || status === "error") {
+        } else if (status === "failed") {
           throw new Error(`IMA Router Task Failed: ${statusData.error || statusData.message || "Unknown error"}`);
         }
         

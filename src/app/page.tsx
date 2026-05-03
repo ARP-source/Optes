@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import LiveFeedPanel, { FeedEntry } from "@/components/LiveFeedPanel";
 import VideoPanel from "@/components/VideoPanel";
 import AIReportPanel, { AIReport } from "@/components/AIReportPanel";
@@ -13,7 +13,51 @@ export default function Dashboard() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [status, setStatus] = useState("Connecting to Command Center...");
 
+  const pendingTaskIdRef = useRef<string | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
+    const startPollingTask = (taskId: string) => {
+      if (pendingTaskIdRef.current === taskId) return;
+      
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+      
+      pendingTaskIdRef.current = taskId;
+      setIsGenerating(true);
+      
+      const poll = async () => {
+        try {
+          const res = await fetch(`/api/poll-video?taskId=${taskId}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          
+          if (data.status === "completed" && data.videoUrl) {
+            setVideoUrl(data.videoUrl);
+            setIsGenerating(false);
+            if (pollIntervalRef.current) {
+              clearInterval(pollIntervalRef.current);
+              pollIntervalRef.current = null;
+            }
+            pendingTaskIdRef.current = null;
+          } else if (data.status === "failed") {
+            setIsGenerating(false);
+            if (pollIntervalRef.current) {
+              clearInterval(pollIntervalRef.current);
+              pollIntervalRef.current = null;
+            }
+            pendingTaskIdRef.current = null;
+          }
+        } catch (err) {
+          console.error("Polling error", err);
+        }
+      };
+      
+      poll();
+      pollIntervalRef.current = setInterval(poll, 5000);
+    };
+
     const eventSource = new EventSource("/api/stream");
 
     eventSource.onmessage = (event) => {
@@ -24,14 +68,15 @@ export default function Dashboard() {
       } else if (data.type === "update") {
         setFeed(data.feed);
         setReport(data.report);
-        setVideoUrl(data.video);
         setLastUpdated(data.lastUpdated);
         
-        // If no video yet, keep the generating state active
-        if (!data.video) {
-          setIsGenerating(true);
-        } else {
+        if (data.video) {
+          setVideoUrl(data.video);
           setIsGenerating(false);
+        } else if (data.taskId && !data.video) {
+          startPollingTask(data.taskId);
+        } else if (!data.video && !data.taskId && !pendingTaskIdRef.current) {
+          setIsGenerating(true);
         }
       } else if (data.type === "error") {
         setStatus("Error: " + data.message);
@@ -45,6 +90,9 @@ export default function Dashboard() {
 
     return () => {
       eventSource.close();
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
     };
   }, []);
 

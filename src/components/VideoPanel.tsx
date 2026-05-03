@@ -48,7 +48,7 @@ export default function VideoPanel({ videoUrl, isGenerating, lastUpdated }: Vide
           {/* HUD Overlay Elements */}
           <div className="absolute top-4 left-4 flex flex-col gap-1 pointer-events-none">
             <div className="text-[10px] font-mono text-accent-green bg-black/40 px-1">REC ● AERIAL_01</div>
-            <div className="text-[8px] font-mono text-zinc-400 bg-black/40 px-1">LAT: 34.0522 N | LON: 118.2437 W</div>
+            <div className="text-[8px] font-mono text-zinc-400 bg-black/40 px-1">LAT: 37.4146 N | LON: 122.0775 W</div>
           </div>
         </div>
 

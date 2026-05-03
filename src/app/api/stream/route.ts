@@ -75,6 +75,7 @@ export async function GET(req: NextRequest) {
             feed: activeData,
             report: lastReport,
             video: lastVideo?.videoUrl || null,
+            taskId: lastVideo?.taskId || null,
             lastUpdated: new Date().toLocaleTimeString(),
           });
 
